@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <meta name="theme-color" content="#a855f7" />
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Agora Web SDK 4.x -->
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.2.js"></script>
@@ -148,6 +150,25 @@
       </button>
 
       <!-- Sound control -->
+      <!-- PWA Install Prompt -->
+      <div id="install-card" class="hidden fixed bottom-24 right-4 w-80 p-4 rounded-2xl bg-black/70 border border-pink-400/40 shadow-2xl backdrop-blur z-30">
+        <div class="flex items-start gap-3">
+          <div class="shrink-0">
+            <svg width="28" height="28" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="drop-shadow brightness-200 contrast-125">
+              <image href="https://upload.wikimedia.org/wikipedia/commons/6/60/Cat_silhouette.svg" x="0" y="0" width="64" height="64"/>
+            </svg>
+          </div>
+          <div class="grow">
+            <div class="text-pink-100 font-semibold">Install espresso.cam</div>
+            <div class="text-pink-200/80 text-xs mt-1">Use it like an app, full screen with no URL bar. Best way to watch the cat cams.</div>
+            <div class="mt-3 flex items-center gap-2">
+              <button id="install-btn" class="px-3 py-1.5 rounded-xl bg-pink-600 text-white text-xs hover:bg-pink-500">Install</button>
+              <button id="install-dismiss" class="px-3 py-1.5 rounded-xl bg-gray-700 text-white text-xs hover:bg-gray-600">Not now</button>
+            </div>
+            <div id="ios-tip" class="hidden text-[11px] text-pink-200/80 mt-2">On iPhone: Share ▸ Add to Home Screen</div>
+          </div>
+        </div>
+      </div>
       <button id="sound-btn" class="fixed bottom-4 left-4 w-12 h-12 rounded-full bg-black/50 border border-pink-400/60 text-pink-200 flex items-center justify-center shadow-lg backdrop-blur hover:bg-black/60 disabled:opacity-40 disabled:cursor-not-allowed">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
           <path d="M3 9v6h4l5 5V4L7 9H3z"/>
@@ -537,6 +558,37 @@
             }
           });
         }
+
+        // PWA: service worker + install prompt
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('./sw.js');
+        }
+        let deferredPrompt = null;
+        const installCard = document.getElementById('install-card');
+        const installBtn = document.getElementById('install-btn');
+        const installDismiss = document.getElementById('install-dismiss');
+        const iosTip = document.getElementById('ios-tip');
+
+        const isIos = () => /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+        const isInStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        if (isIos() && !isInStandalone()) {
+          installCard.classList.remove('hidden');
+          iosTip.classList.remove('hidden');
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          if (!isInStandalone()) installCard.classList.remove('hidden');
+        });
+        if (installDismiss) installDismiss.addEventListener('click', () => installCard.classList.add('hidden'));
+        if (installBtn) installBtn.addEventListener('click', async () => {
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome) installCard.classList.add('hidden');
+          deferredPrompt = null;
+        });
       })();
 
       // Memo logic

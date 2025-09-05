@@ -66,6 +66,12 @@
           >
             Leave Stream
           </button>
+          <button
+            id="enableAudioBtn"
+            class="inline-flex items-center justify-center rounded-md bg-pink-600 hover:bg-pink-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pink-500 px-4 py-2 text-sm font-medium"
+          >
+            Enable Sounds
+          </button>
           <span id="status" class="text-sm text-gray-400">Disconnected</span>
         </div>
 
@@ -100,6 +106,7 @@
       const joinBtn = $("joinBtn");
       const leaveBtn = $("leaveBtn");
       const statusEl = $("status");
+      const enableAudioBtn = $("enableAudioBtn");
       
       // RTM for receiving playSound commands
       /** @type {any} */
@@ -309,6 +316,16 @@
       });
       leaveBtn.addEventListener("click", () => {
         leaveChannel();
+      });
+      enableAudioBtn.addEventListener("click", async () => {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+        } catch (e) {}
       });
 
       // Ensure resources are released if the page is closed/refreshed
