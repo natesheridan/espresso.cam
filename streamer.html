@@ -72,6 +72,12 @@
           >
             Enable Sounds
           </button>
+          <button
+            id="flipBtn"
+            class="inline-flex items-center justify-center rounded-md bg-indigo-700 hover:bg-indigo-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Flip Camera
+          </button>
           <span id="status" class="text-sm text-gray-400">Disconnected</span>
         </div>
 
@@ -107,6 +113,7 @@
       const leaveBtn = $("leaveBtn");
       const statusEl = $("status");
       const enableAudioBtn = $("enableAudioBtn");
+      const flipBtn = $("flipBtn");
       
       // RTM for receiving playSound commands
       /** @type {any} */
@@ -327,6 +334,43 @@
           source.start(0);
         } catch (e) {}
       });
+
+      async function getCurrentCameraDeviceId() {
+        try {
+          if (!cameraTrack) return null;
+          const mediaTrack = cameraTrack.getMediaStreamTrack ? cameraTrack.getMediaStreamTrack() : null;
+          if (mediaTrack && mediaTrack.getSettings) {
+            const settings = mediaTrack.getSettings();
+            return settings && settings.deviceId ? settings.deviceId : null;
+          }
+        } catch (_) {}
+        return null;
+      }
+
+      async function flipCamera() {
+        if (!cameraTrack) return;
+        flipBtn.disabled = true;
+        try {
+          const cameras = await AgoraRTC.getCameras();
+          if (!cameras || cameras.length < 2) {
+            alert("Only one camera detected.");
+            return;
+          }
+          let currentId = await getCurrentCameraDeviceId();
+          let next = cameras[0];
+          if (currentId) {
+            const idx = cameras.findIndex((d) => d.deviceId === currentId);
+            next = cameras[(idx + 1) % cameras.length];
+          }
+          await cameraTrack.setDevice(next.deviceId);
+        } catch (err) {
+          console.warn("Flip camera failed:", err);
+        } finally {
+          flipBtn.disabled = false;
+        }
+      }
+
+      flipBtn.addEventListener("click", flipCamera);
 
       // Ensure resources are released if the page is closed/refreshed
       window.addEventListener("beforeunload", () => {
