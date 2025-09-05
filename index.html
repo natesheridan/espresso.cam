@@ -133,7 +133,7 @@
         </div>
       </div>
 
-      <div id="main-player" class="fixed inset-0 flex items-center justify-center overflow-x-auto overflow-y-hidden touch-pan-x">
+      <div id="main-player" class="fixed inset-0 flex items-center justify-start overflow-x-auto overflow-y-hidden touch-pan-x" style="-webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; touch-action: pan-x;">
         <!-- Brand overlay -->
         <div class="absolute top-4 left-4 flex items-center gap-2 z-10 select-none">
           <svg width="28" height="28" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="drop-shadow brightness-200 contrast-125">
@@ -176,6 +176,7 @@
           <path d="M18.5 12c0 2.28-.92 4.35-2.41 5.84l1.41 1.41A9.5 9.5 0 0 0 20.5 12c0-2.62-1.06-4.99-2.79-6.71l-1.41 1.41A7.5 7.5 0 0 1 18.5 12z"/>
         </svg>
       </button>
+      <button id="fit-toggle" class="fixed bottom-4 left-20 px-3 py-2 rounded-xl bg-black/50 border border-pink-400/60 text-pink-200 text-xs shadow-lg backdrop-blur hover:bg-black/60">Fit width</button>
       <div id="sound-menu" class="hidden fixed bottom-20 left-4 p-2 rounded-2xl bg-black/60 border border-purple-400/40 shadow-xl backdrop-blur z-20">
         <div class="grid grid-cols-3 gap-2">
           <button data-sound="meow" class="px-3 py-1.5 rounded-xl bg-pink-600/80 text-white text-xs hover:bg-pink-500">Meow</button>
@@ -228,6 +229,7 @@
       const offlineOverlay = $("offline-overlay");
       const soundBtn = $("sound-btn");
       const soundMenu = $("sound-menu");
+      const fitToggle = $("fit-toggle");
 
       // Track remote users and which is active/preview
       const remoteUsers = new Map(); // uid -> { user, videoTrack, audioTrack }
@@ -296,12 +298,26 @@
         if (emptyState) emptyState.style.display = hasChildren ? "none" : "flex";
       }
 
+      let fitMode = "height"; // 'height' (default, pan horizontally) or 'width'
+
       function sizeMainVideo() {
         if (!mainVideo) return;
-        const h = window.innerHeight;
-        const w = Math.round(h * 16 / 9);
-        mainVideo.style.height = h + "px";
-        mainVideo.style.width = w + "px";
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        if (fitMode === "height") {
+          const w = Math.round(viewportH * 16 / 9);
+          mainVideo.style.height = viewportH + "px";
+          mainVideo.style.width = w + "px";
+          // allow horizontal scroll
+          mainWrapper.scrollLeft = Math.max(0, (w - viewportW) / 2);
+        } else {
+          const h = Math.round(viewportW * 9 / 16);
+          mainVideo.style.width = viewportW + "px";
+          mainVideo.style.height = h + "px";
+          // center vertically within wrapper
+          // mainWrapper is full-screen flex center, height set, no scroll needed
+          mainWrapper.scrollLeft = 0;
+        }
       }
 
       function showLoading(show) {
@@ -542,6 +558,14 @@
         window.addEventListener("resize", sizeMainVideo);
         // Swap to preview on click
         if (previewBtn) previewBtn.addEventListener("click", promotePreviewToMain);
+        // Toggle fit mode
+        if (fitToggle) {
+          fitToggle.addEventListener("click", () => {
+            fitMode = fitMode === "height" ? "width" : "height";
+            fitToggle.textContent = fitMode === "height" ? "Fit width" : "Fit height";
+            sizeMainVideo();
+          });
+        }
         // Sound menu logic
         if (soundBtn) {
           soundBtn.addEventListener("click", () => {
