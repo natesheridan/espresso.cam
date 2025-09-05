@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Agora Web SDK 4.x -->
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.2.js"></script>
+    <!-- Agora RTM SDK -->
+    <script src="https://download.agora.io/sdk/release/AgoraRTM-1.5.1.js"></script>
   </head>
   <body class="min-h-screen bg-gray-950 text-gray-100">
     <main class="max-w-5xl mx-auto px-4 py-10">
@@ -98,6 +100,30 @@
       const joinBtn = $("joinBtn");
       const leaveBtn = $("leaveBtn");
       const statusEl = $("status");
+      
+      // RTM for receiving playSound commands
+      /** @type {any} */
+      let rtmClient = null;
+      /** @type {any} */
+      let rtmChannel = null;
+      let rtmUid = null;
+
+      // Simple sound library (placeholder). Replace sources as desired.
+      const soundFiles = {
+        meow: "./assets/cat-meow-8-fx-306184.mp3",
+        treats: "./assets/excited-cat-meowing-anticipating-food-331462.mp3",
+        pspsps: "./assets/cat-purring-261128.mp3",
+        chirp: "./assets/bird-chirp-88706.mp3",
+      };
+      const soundElements = {};
+      function getSoundEl(key) {
+        if (!soundElements[key]) {
+          const audio = new Audio(soundFiles[key]);
+          audio.preload = "auto";
+          soundElements[key] = audio;
+        }
+        return soundElements[key];
+      }
 
       function setStatus(text) {
         statusEl.textContent = text;
@@ -138,7 +164,7 @@
           setUiWhileJoining();
 
           // 1) Initialize the client. We use the 'live' profile to support host/audience roles.
-          client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+          client = AgoraRTC.createClient({ mode: "live", codec: "h264" });
           // Broadcasters are 'host'. This allows publishing.
           await client.setClientRole("host");
 
@@ -160,6 +186,43 @@
           joined = true;
           setUiWhileStreaming();
           console.log("Joined as UID:", uid);
+
+          // Initialize RTM for receiving control messages
+          try {
+            rtmClient = AgoraRTM.createInstance(appId);
+            rtmUid = String(uid);
+            await rtmClient.login({ uid: rtmUid });
+            rtmChannel = await rtmClient.createChannel(channel);
+            await rtmChannel.join();
+            // Handle peer messages
+            rtmClient.on("MessageFromPeer", async (message, peerId) => {
+              try {
+                const payload = JSON.parse(message.text || "{}");
+                if (payload.type === "playSound" && payload.key && soundFiles[payload.key]) {
+                  const el = getSoundEl(payload.key);
+                  // Some browsers require a user gesture; attempt to play silently with volume control if needed
+                  el.currentTime = 0;
+                  el.volume = 1.0;
+                  await el.play();
+                } else if (payload.type === "memo" && payload.data && payload.format) {
+                  // Decode and play once, do not persist
+                  const binary = atob(payload.data);
+                  const bytes = new Uint8Array(binary.length);
+                  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                  const blob = new Blob([bytes], { type: payload.format });
+                  const url = URL.createObjectURL(blob);
+                  const memoAudio = new Audio(url);
+                  memoAudio.volume = 1.0;
+                  memoAudio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
+                  try { await memoAudio.play(); } catch (e) { console.warn("Memo play failed:", e); }
+                }
+              } catch (e) {
+                console.warn("Failed to handle RTM message:", e);
+              }
+            });
+          } catch (e) {
+            console.warn("RTM init failed:", e);
+          }
         } catch (err) {
           console.error(err);
           alert("Failed to start streaming: " + (err && err.message ? err.message : err));
@@ -191,6 +254,10 @@
           } catch (err) {
             console.warn("Leave warning:", err);
           }
+          try {
+            if (rtmChannel) await rtmChannel.leave();
+            if (rtmClient && rtmClient.logout) await rtmClient.logout();
+          } catch (e) {}
           client = null;
           joined = false;
           setUiWhileDisconnected();
@@ -216,6 +283,25 @@
           console.warn("Cleanup warning:", err);
         }
       }
+
+      // Prefill inputs with your defaults and allow URL overrides
+      (function prefill() {
+        const params = new URLSearchParams(window.location.search);
+        const defaultAppId = "c36cae78aea74b38ae8706fcd9557387";
+        const defaultChannel = "cat-cam";
+
+        const appIdParam = params.get("appId");
+        const channelParam = params.get("channel");
+        const tokenParam = params.get("token");
+
+        const appIdEl = $("appId");
+        const channelEl = $("channel");
+        const tokenEl = $("token");
+
+        if (appIdEl && !appIdEl.value) appIdEl.value = appIdParam || defaultAppId;
+        if (channelEl && !channelEl.value) channelEl.value = channelParam || defaultChannel;
+        if (tokenEl && tokenParam) tokenEl.value = tokenParam;
+      })();
 
       // Wire up UI events
       joinBtn.addEventListener("click", () => {

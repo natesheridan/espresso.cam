@@ -4,18 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Live Viewer | Multi-Streamer Broadcast</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Agora Web SDK 4.x -->
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.2.js"></script>
+    <!-- Agora RTM SDK -->
+    <script src="https://download.agora.io/sdk/release/AgoraRTM-1.5.1.js"></script>
+    <!-- Motion One for small cat animations -->
+    <script src="https://unpkg.com/motion@10.16.2/dist/motion.umd.js"></script>
   </head>
-  <body class="min-h-screen bg-gray-950 text-gray-100">
+  <body class="min-h-screen bg-gradient-to-br from-pink-900 via-purple-900 to-gray-900 text-pink-50">
     <main class="max-w-6xl mx-auto px-4 py-10">
-      <header class="mb-8">
+      <header class="mb-8 hidden">
         <h1 class="text-3xl font-bold tracking-tight">Live Viewer</h1>
         <p class="text-gray-400 mt-2">Watch all active broadcasters in a shared channel.</p>
       </header>
 
-      <section class="bg-gray-900/60 border border-gray-800 rounded-xl p-6 shadow-lg">
+      <section class="hidden bg-gray-900/60 border border-gray-800 rounded-xl p-6 shadow-lg">
         <div class="grid md:grid-cols-3 gap-4">
           <div class="md:col-span-2">
             <label for="appId" class="block text-sm text-gray-300">Agora App ID</label>
@@ -56,12 +63,128 @@
 
         <div class="mt-6">
           <h2 class="text-lg font-semibold mb-3">Live Streams</h2>
+          <div id="empty-state" class="hidden flex items-center justify-center py-16">
+            <div class="text-center">
+              <div class="mx-auto mb-4 w-20 h-20 relative">
+                <div id="cat" class="absolute inset-0">
+                  <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="32" cy="32" r="30" fill="#111827" stroke="#374151" />
+                    <path d="M20 48c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
+                    <circle cx="26" cy="28" r="3" fill="#E5E7EB"/>
+                    <circle cx="38" cy="28" r="3" fill="#E5E7EB"/>
+                    <path d="M24 20l4 4M40 20l-4 4" stroke="#E5E7EB" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M28 36c2.667 2 5.333 2 8 0" stroke="#E5E7EB" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                </div>
+              </div>
+              <p class="text-gray-300 font-medium">No live streams yet</p>
+              <p class="text-gray-500 text-sm">Well connect automatically when a stream starts.</p>
+            </div>
+          </div>
           <div
             id="remote-streams-container"
             class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
           ></div>
         </div>
       </section>
+      <!-- Full-screen player overlays and containers -->
+      <div id="loading-overlay" class="fixed inset-0 flex items-center justify-center pointer-events-none">
+        <div class="text-center">
+          <div class="mx-auto mb-6 w-24 h-24 relative">
+            <div id="cat-loading" class="absolute inset-0">
+              <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#f472b6"/>
+                    <stop offset="100%" stop-color="#a78bfa"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="32" cy="32" r="30" fill="#1f1430" stroke="#a855f7" />
+                <path d="M20 48c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="26" cy="28" r="3" fill="#fde68a"/>
+                <circle cx="38" cy="28" r="3" fill="#fde68a"/>
+                <path d="M24 20l4 4M40 20l-4 4" stroke="#f9a8d4" stroke-width="2" stroke-linecap="round"/>
+                <path d="M28 36c2.667 2 5.333 2 8 0" stroke="#f9a8d4" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <p class="text-pink-200 font-medium">Summoning the cat cams…</p>
+        </div>
+      </div>
+
+      <div id="offline-overlay" class="hidden fixed inset-0 flex items-center justify-center">
+        <div class="text-center">
+          <div class="mx-auto mb-6 w-24 h-24 relative">
+            <div id="cat-offline" class="absolute inset-0">
+              <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="32" cy="32" r="30" fill="#1f1430" stroke="#a855f7" />
+                <path d="M20 48c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke="#a78bfa" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="26" cy="28" r="3" fill="#fde68a"/>
+                <circle cx="38" cy="28" r="3" fill="#fde68a"/>
+                <path d="M24 20l4 4M40 20l-4 4" stroke="#f9a8d4" stroke-width="2" stroke-linecap="round"/>
+                <path d="M28 36c2.667 2 5.333 2 8 0" stroke="#f9a8d4" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <p class="text-pink-200 font-semibold text-lg">Cat cams are offline</p>
+          <p class="text-pink-200/70 text-sm">We’ll connect automatically when one comes online.</p>
+        </div>
+      </div>
+
+      <div id="main-player" class="fixed inset-0 flex items-center justify-center overflow-x-auto overflow-y-hidden touch-pan-x">
+        <!-- Brand overlay -->
+        <div class="absolute top-4 left-4 flex items-center gap-2 z-10 select-none">
+          <svg width="28" height="28" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="drop-shadow brightness-200 contrast-125">
+            <image href="https://upload.wikimedia.org/wikipedia/commons/6/60/Cat_silhouette.svg" x="0" y="0" width="64" height="64"/>
+          </svg>
+          <span style="font-family: 'Great Vibes', cursive;" class="text-pink-200 text-2xl leading-none">espresso.cam</span>
+        </div>
+        <div id="main-video" class="relative h-screen" style="width: calc(100vh * 16 / 9);"></div>
+      </div>
+
+      <button id="preview-container" class="hidden fixed bottom-4 right-4 w-40 h-24 rounded-xl border-2 border-pink-400/70 bg-black/40 backdrop-blur-sm shadow-lg overflow-hidden ring-1 ring-purple-400/30">
+        <div id="preview-video" class="w-full h-full"></div>
+        <span class="absolute bottom-1 right-2 px-2 py-0.5 rounded-full text-[10px] bg-pink-500 text-white shadow">Next Camera</span>
+      </button>
+
+      <!-- Sound control -->
+      <button id="sound-btn" class="fixed bottom-4 left-4 w-12 h-12 rounded-full bg-black/50 border border-pink-400/60 text-pink-200 flex items-center justify-center shadow-lg backdrop-blur hover:bg-black/60 disabled:opacity-40 disabled:cursor-not-allowed">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+          <path d="M14.5 12a4.5 4.5 0 0 0-.88-2.64l1.54-1.18A6.5 6.5 0 0 1 16.5 12c0 1.44-.48 2.77-1.34 3.82l-1.54-1.18c.54-.7.88-1.58.88-2.64z"/>
+          <path d="M18.5 12c0 2.28-.92 4.35-2.41 5.84l1.41 1.41A9.5 9.5 0 0 0 20.5 12c0-2.62-1.06-4.99-2.79-6.71l-1.41 1.41A7.5 7.5 0 0 1 18.5 12z"/>
+        </svg>
+      </button>
+      <div id="sound-menu" class="hidden fixed bottom-20 left-4 p-2 rounded-2xl bg-black/60 border border-purple-400/40 shadow-xl backdrop-blur z-20">
+        <div class="grid grid-cols-3 gap-2">
+          <button data-sound="meow" class="px-3 py-1.5 rounded-xl bg-pink-600/80 text-white text-xs hover:bg-pink-500">Meow</button>
+          <button data-sound="treats" class="px-3 py-1.5 rounded-xl bg-purple-600/80 text-white text-xs hover:bg-purple-500">Treats</button>
+          <button data-sound="pspsps" class="px-3 py-1.5 rounded-xl bg-fuchsia-600/80 text-white text-xs hover:bg-fuchsia-500">Pss-pss</button>
+          <button data-sound="chirp" class="px-3 py-1.5 rounded-xl bg-rose-600/80 text-white text-xs hover:bg-rose-500">Chirp</button>
+          <button id="memo-open" class="px-3 py-1.5 rounded-xl bg-indigo-600/80 text-white text-xs hover:bg-indigo-500 col-span-2">Memo</button>
+        </div>
+        <p class="mt-2 text-xs text-pink-200/70">Oops this doesn't work yet..</p>
+      </div>
+
+      <!-- Record Memo Panel -->
+      <div id="memo-panel" class="hidden fixed bottom-24 left-4 w-72 p-4 rounded-2xl bg-black/70 border border-pink-400/40 shadow-2xl backdrop-blur z-30">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-pink-200 text-sm">Record Memo</span>
+          <button id="memo-close" class="text-pink-300 text-xs hover:text-white">Close</button>
+        </div>
+        <div class="flex items-center gap-3 mb-3">
+          <button id="memo-toggle" class="px-3 py-1.5 rounded-xl bg-pink-600 text-white text-xs hover:bg-pink-500">Start</button>
+          <span id="memo-timer" class="text-pink-100 text-xs">00:00</span>
+        </div>
+        <div class="mb-3">
+          <audio id="memo-audio" class="w-full" controls></audio>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="memo-send" class="px-3 py-1.5 rounded-xl bg-purple-600/80 text-white text-xs hover:bg-purple-500 disabled:opacity-40" disabled>Send</button>
+          <button id="memo-reset" class="px-3 py-1.5 rounded-xl bg-gray-600/80 text-white text-xs hover:bg-gray-500 disabled:opacity-40" disabled>Reset</button>
+        </div>
+        <p class="mt-2 text-[11px] text-pink-200/80">Tip: Aim for ~5s; max 10s. You can preview, send multiple times, or reset.</p>
+      </div>
     </main>
 
     <script>
@@ -75,6 +198,34 @@
       const leaveBtn = $("leaveBtn");
       const statusEl = $("status");
       const container = $("remote-streams-container");
+      const emptyState = $("empty-state");
+      const mainWrapper = $("main-player");
+      const mainVideo = $("main-video");
+      const previewBtn = $("preview-container");
+      const previewVideo = $("preview-video");
+      const loadingOverlay = $("loading-overlay");
+      const offlineOverlay = $("offline-overlay");
+      const soundBtn = $("sound-btn");
+      const soundMenu = $("sound-menu");
+
+      // Track remote users and which is active/preview
+      const remoteUsers = new Map(); // uid -> { user, videoTrack, audioTrack }
+      let activeUid = null;
+      let previewUid = null;
+
+      // RTM
+      /** @type {any} */
+      let rtmClient = null;
+      /** @type {any} */
+      let rtmChannel = null;
+
+      // Memo recording
+      let mediaRecorder = null;
+      let memoChunks = [];
+      let memoTimerId = null;
+      let memoSeconds = 0;
+      let memoBlob = null;
+      let memoUrl = null;
 
       function setStatus(text) {
         statusEl.textContent = text;
@@ -118,9 +269,118 @@
         }
       }
 
-      async function startWatching() {
-        const appId = $("appId").value.trim();
-        const channel = $("channel").value.trim();
+      function updateEmptyStateVisibility() {
+        if (!container) return;
+        const hasChildren = container.children.length > 0;
+        if (emptyState) emptyState.style.display = hasChildren ? "none" : "flex";
+      }
+
+      function sizeMainVideo() {
+        if (!mainVideo) return;
+        const h = window.innerHeight;
+        const w = Math.round(h * 16 / 9);
+        mainVideo.style.height = h + "px";
+        mainVideo.style.width = w + "px";
+      }
+
+      function showLoading(show) {
+        if (!loadingOverlay) return;
+        loadingOverlay.style.display = show ? "flex" : "none";
+      }
+
+      function showOffline(show) {
+        if (!offlineOverlay) return;
+        offlineOverlay.style.display = show ? "flex" : "none";
+      }
+
+      function playInMain(uid) {
+        const entry = remoteUsers.get(uid);
+        if (!entry || !entry.videoTrack) return;
+        // Try request high stream for the main
+        try {
+          if (client && client.setRemoteVideoStreamType) client.setRemoteVideoStreamType(entry.user, "high");
+        } catch (e) {}
+        entry.videoTrack.play(mainVideo);
+        if (entry.audioTrack) entry.audioTrack.play();
+        activeUid = uid;
+        showLoading(false);
+        showOffline(false);
+      }
+
+      function playInPreview(uid) {
+        const entry = remoteUsers.get(uid);
+        if (!entry || !entry.videoTrack) return;
+        // Try request low stream for the preview
+        try {
+          if (client && client.enableDualStream) client.enableDualStream();
+          if (client && client.setRemoteVideoStreamType) client.setRemoteVideoStreamType(entry.user, "low");
+        } catch (e) {}
+        entry.videoTrack.play(previewVideo);
+        previewUid = uid;
+        previewBtn.classList.remove("hidden");
+      }
+
+      function clearPreview() {
+        previewBtn.classList.add("hidden");
+        previewVideo.innerHTML = "";
+        previewUid = null;
+      }
+
+      function promotePreviewToMain() {
+        if (!previewUid) return;
+        // Stop current main video if exists
+        mainVideo.innerHTML = "";
+        const oldActive = activeUid;
+        playInMain(previewUid);
+        // Old active becomes preview if still present
+        if (oldActive && remoteUsers.has(oldActive)) {
+          previewVideo.innerHTML = "";
+          playInPreview(oldActive);
+        } else {
+          clearPreview();
+        }
+      }
+
+      async function initRTM(appId, channel) {
+        try {
+          rtmClient = AgoraRTM.createInstance(appId);
+          const viewerUid = "viewer-" + Math.floor(Math.random() * 1e9);
+          await rtmClient.login({ uid: String(viewerUid) });
+          rtmChannel = await rtmClient.createChannel(channel);
+          await rtmChannel.join();
+        } catch (e) {
+          console.warn("RTM init failed:", e);
+        }
+      }
+
+      async function sendPlaySound(key) {
+        if (!rtmClient || !activeUid) return;
+        try {
+          await rtmClient.sendMessageToPeer({ text: JSON.stringify({ type: "playSound", key }) }, String(activeUid));
+        } catch (e) {
+          console.warn("RTM send failed:", e);
+        }
+      }
+
+      // Prefill and auto-join: Embed defaults, allow URL overrides, and auto connect
+      function applyDefaults() {
+        const params = new URLSearchParams(window.location.search);
+        const defaultAppId = "c36cae78aea74b38ae8706fcd9557387";
+        const defaultChannel = "cat-cam";
+
+        const appIdEl = $("appId");
+        const channelEl = $("channel");
+
+        const appId = params.get("appId") || defaultAppId;
+        const channel = params.get("channel") || defaultChannel;
+
+        if (appIdEl) appIdEl.value = appId;
+        if (channelEl) channelEl.value = channel;
+
+        return { appId, channel };
+      }
+
+      async function startWatching(appId, channel) {
         if (!appId || !channel) {
           alert("Please enter both App ID and Channel Name.");
           return;
@@ -129,23 +389,30 @@
 
         try {
           setUiWhileJoining();
-          client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+          client = AgoraRTC.createClient({ mode: "live", codec: "h264" });
           // Audience role can't publish, only subscribe
           await client.setClientRole("audience");
 
           // Join without token for viewers (public). If you use tokens, add an input similarly
           await client.join(appId, channel, null, null);
+          try { if (client.enableDualStream) await client.enableDualStream(); } catch (e) {}
+          // Initialize RTM for signaling sounds
+          await initRTM(appId, channel);
 
           // Subscribe to remote users as they publish
           client.on("user-published", async (user, mediaType) => {
             try {
               await client.subscribe(user, mediaType);
-              const target = ensureUserContainer(user.uid);
-              if (mediaType === "video" && user.videoTrack) {
-                user.videoTrack.play(target);
-              }
-              if (mediaType === "audio" && user.audioTrack) {
-                user.audioTrack.play();
+              const entry = remoteUsers.get(user.uid) || { user };
+              if (mediaType === "video") entry.videoTrack = user.videoTrack;
+              if (mediaType === "audio") entry.audioTrack = user.audioTrack;
+              remoteUsers.set(user.uid, entry);
+
+              // Decide placement
+              if (!activeUid && entry.videoTrack) {
+                playInMain(user.uid);
+              } else if (!previewUid && entry.videoTrack && user.uid !== activeUid) {
+                playInPreview(user.uid);
               }
             } catch (err) {
               console.warn("Subscribe error:", err);
@@ -154,14 +421,34 @@
 
           // If the user already published before we joined, we may receive 'user-joined' then 'user-published'.
           client.on("user-unpublished", (user, mediaType) => {
-            // When any of a user's tracks is unpublished, if video is removed, we remove the UI container.
             if (mediaType === "video") {
-              removeUserContainer(user.uid);
+              // Remove from our map
+              remoteUsers.delete(user.uid);
+              if (user.uid === activeUid) {
+                mainVideo.innerHTML = "";
+                if (previewUid) {
+                  promotePreviewToMain();
+                } else {
+                  showOffline(true);
+                }
+              } else if (user.uid === previewUid) {
+                clearPreview();
+              }
             }
           });
 
           client.on("user-left", (user) => {
-            removeUserContainer(user.uid);
+            remoteUsers.delete(user.uid);
+            if (user.uid === activeUid) {
+              mainVideo.innerHTML = "";
+              if (previewUid) {
+                promotePreviewToMain();
+              } else {
+                showOffline(true);
+              }
+            } else if (user.uid === previewUid) {
+              clearPreview();
+            }
           });
 
           joined = true;
@@ -191,10 +478,15 @@
           client = null;
           joined = false;
           setUiWhileDisconnected();
+          updateEmptyStateVisibility();
         }
       }
 
-      watchBtn.addEventListener("click", () => startWatching());
+      watchBtn.addEventListener("click", () => {
+        const appId = $("appId").value.trim();
+        const channel = $("channel").value.trim();
+        startWatching(appId, channel);
+      });
       leaveBtn.addEventListener("click", () => leave());
 
       window.addEventListener("beforeunload", () => {
@@ -202,6 +494,139 @@
           leave();
         }
       });
+
+      // Start: defaults, auto-join, and cat animation
+      (function init() {
+        const { appId, channel } = applyDefaults();
+        // Auto-join for seamless viewer experience
+        startWatching(appId, channel);
+
+        // Friendly cat animation using Motion One
+        try {
+          if (window.motion && document.getElementById("cat-loading")) {
+            const { animate, timeline } = window.motion;
+            timeline([
+              ["#cat-loading", { y: [0, -6, 0] }, { duration: 2.4, repeat: Infinity }],
+              ["#cat-loading", { rotate: [0, 2, -2, 0] }, { duration: 3, repeat: Infinity }],
+            ]);
+            if (document.getElementById("cat-offline")) {
+              timeline([
+                ["#cat-offline", { scale: [1, 1.05, 1] }, { duration: 2.2, repeat: Infinity }],
+              ]);
+            }
+          }
+        } catch (_) {}
+        updateEmptyStateVisibility();
+        sizeMainVideo();
+        window.addEventListener("resize", sizeMainVideo);
+        // Swap to preview on click
+        if (previewBtn) previewBtn.addEventListener("click", promotePreviewToMain);
+        // Sound menu logic
+        if (soundBtn) {
+          soundBtn.addEventListener("click", () => {
+            if (!activeUid) return;
+            if (soundMenu) soundMenu.classList.toggle("hidden");
+          });
+        }
+        if (soundMenu) {
+          soundMenu.addEventListener("click", (e) => {
+            const target = e.target;
+            if (target && target.dataset && target.dataset.sound) {
+              sendPlaySound(target.dataset.sound);
+              soundMenu.classList.add("hidden");
+            }
+          });
+        }
+      })();
+
+      // Memo logic
+      (function setupMemo() {
+        const memoPanel = document.getElementById("memo-panel");
+        const memoOpen = document.getElementById("memo-open");
+        const memoClose = document.getElementById("memo-close");
+        const memoToggle = document.getElementById("memo-toggle");
+        const memoTimer = document.getElementById("memo-timer");
+        const memoAudio = document.getElementById("memo-audio");
+        const memoSend = document.getElementById("memo-send");
+        const memoReset = document.getElementById("memo-reset");
+
+        function updateTimer() {
+          const mm = String(Math.floor(memoSeconds / 60)).padStart(2, "0");
+          const ss = String(memoSeconds % 60).padStart(2, "0");
+          memoTimer.textContent = `${mm}:${ss}`;
+        }
+
+        function cleanupMemoUrl() {
+          if (memoUrl) {
+            URL.revokeObjectURL(memoUrl);
+            memoUrl = null;
+          }
+        }
+
+        function setReadyState(hasRecording) {
+          if (memoSend) memoSend.disabled = !hasRecording;
+          if (memoReset) memoReset.disabled = !hasRecording;
+        }
+
+        async function startRecording() {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            memoChunks = [];
+            mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+            mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) memoChunks.push(e.data); };
+            mediaRecorder.onstop = async () => {
+              try {
+                memoBlob = new Blob(memoChunks, { type: "audio/webm" });
+                cleanupMemoUrl();
+                memoUrl = URL.createObjectURL(memoBlob);
+                memoAudio.src = memoUrl;
+                setReadyState(true);
+              } catch (err) { console.warn("Memo prepare failed:", err); }
+            };
+            mediaRecorder.start();
+            memoSeconds = 0;
+            updateTimer();
+            memoTimerId = setInterval(() => {
+              memoSeconds += 1;
+              updateTimer();
+              if (memoSeconds >= 10) stopRecording();
+            }, 1000);
+            memoToggle.textContent = "Stop";
+          } catch (err) {
+            console.warn("Recording failed:", err);
+          }
+        }
+
+        function stopRecording() {
+          if (memoTimerId) { clearInterval(memoTimerId); memoTimerId = null; }
+          if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+          memoToggle.textContent = "Start";
+        }
+
+        if (memoOpen && memoPanel) memoOpen.addEventListener("click", () => { memoPanel.classList.remove("hidden"); });
+        if (memoClose && memoPanel) memoClose.addEventListener("click", () => { memoPanel.classList.add("hidden"); });
+        if (memoToggle) memoToggle.addEventListener("click", () => {
+          if (!mediaRecorder || mediaRecorder.state === "inactive") startRecording(); else stopRecording();
+        });
+
+        if (memoSend) memoSend.addEventListener("click", async () => {
+          if (!memoBlob || !rtmClient || !activeUid) return;
+          try {
+            const arrayBuf = await memoBlob.arrayBuffer();
+            const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)));
+            await rtmClient.sendMessageToPeer({ text: JSON.stringify({ type: "memo", format: "audio/webm", data: base64 }) }, String(activeUid));
+          } catch (err) { console.warn("Memo send failed:", err); }
+        });
+
+        if (memoReset) memoReset.addEventListener("click", () => {
+          memoChunks = [];
+          memoBlob = null;
+          cleanupMemoUrl();
+          memoAudio.removeAttribute("src");
+          setReadyState(false);
+          memoTimer.textContent = "00:00";
+        });
+      })();
     </script>
   </body>
   </html>
