@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Viewer | Multi-Streamer Broadcast</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Agora Web SDK 4.x -->
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.2.js"></script>
+  </head>
+  <body class="min-h-screen bg-gray-950 text-gray-100">
+    <main class="max-w-6xl mx-auto px-4 py-10">
+      <header class="mb-8">
+        <h1 class="text-3xl font-bold tracking-tight">Live Viewer</h1>
+        <p class="text-gray-400 mt-2">Watch all active broadcasters in a shared channel.</p>
+      </header>
+
+      <section class="bg-gray-900/60 border border-gray-800 rounded-xl p-6 shadow-lg">
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="md:col-span-2">
+            <label for="appId" class="block text-sm text-gray-300">Agora App ID</label>
+            <input
+              id="appId"
+              type="text"
+              placeholder="e.g., 0123456789abcdef0123456789abcdef"
+              class="mt-1 w-full rounded-md bg-gray-800 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div class="md:col-span-1">
+            <label for="channel" class="block text-sm text-gray-300">Channel Name</label>
+            <input
+              id="channel"
+              type="text"
+              placeholder="e.g., my-shared-room"
+              class="mt-1 w-full rounded-md bg-gray-800 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+          <button
+            id="watchBtn"
+            class="inline-flex items-center justify-center rounded-md bg-indigo-600 hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Watch Stream
+          </button>
+          <button
+            id="leaveBtn"
+            class="inline-flex items-center justify-center rounded-md bg-gray-700 hover:bg-gray-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled
+          >
+            Leave
+          </button>
+          <span id="status" class="text-sm text-gray-400">Disconnected</span>
+        </div>
+
+        <div class="mt-6">
+          <h2 class="text-lg font-semibold mb-3">Live Streams</h2>
+          <div
+            id="remote-streams-container"
+            class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+          ></div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // Viewer: join as audience, subscribe to 'user-published', render tracks into grid
+      /** @type {import('agora-rtc-sdk-ng').IAgoraRTCClient | null} */
+      let client = null;
+      let joined = false;
+
+      const $ = (id) => document.getElementById(id);
+      const watchBtn = $("watchBtn");
+      const leaveBtn = $("leaveBtn");
+      const statusEl = $("status");
+      const container = $("remote-streams-container");
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function setUiWhileJoining() {
+        watchBtn.disabled = true;
+        leaveBtn.disabled = true;
+        setStatus("Joining…");
+      }
+
+      function setUiWhileWatching() {
+        watchBtn.disabled = true;
+        leaveBtn.disabled = false;
+        setStatus("Watching");
+      }
+
+      function setUiWhileDisconnected() {
+        watchBtn.disabled = false;
+        leaveBtn.disabled = true;
+        setStatus("Disconnected");
+      }
+
+      function ensureUserContainer(uid) {
+        const id = `user-container-${uid}`;
+        let el = document.getElementById(id);
+        if (!el) {
+          el = document.createElement("div");
+          el.id = id;
+          el.className = "relative aspect-video w-full rounded-lg bg-black/60 border border-gray-800 overflow-hidden";
+          container.appendChild(el);
+        }
+        return el;
+      }
+
+      function removeUserContainer(uid) {
+        const id = `user-container-${uid}`;
+        const el = document.getElementById(id);
+        if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      }
+
+      async function startWatching() {
+        const appId = $("appId").value.trim();
+        const channel = $("channel").value.trim();
+        if (!appId || !channel) {
+          alert("Please enter both App ID and Channel Name.");
+          return;
+        }
+        if (joined) return;
+
+        try {
+          setUiWhileJoining();
+          client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+          // Audience role can't publish, only subscribe
+          await client.setClientRole("audience");
+
+          // Join without token for viewers (public). If you use tokens, add an input similarly
+          await client.join(appId, channel, null, null);
+
+          // Subscribe to remote users as they publish
+          client.on("user-published", async (user, mediaType) => {
+            try {
+              await client.subscribe(user, mediaType);
+              const target = ensureUserContainer(user.uid);
+              if (mediaType === "video" && user.videoTrack) {
+                user.videoTrack.play(target);
+              }
+              if (mediaType === "audio" && user.audioTrack) {
+                user.audioTrack.play();
+              }
+            } catch (err) {
+              console.warn("Subscribe error:", err);
+            }
+          });
+
+          // If the user already published before we joined, we may receive 'user-joined' then 'user-published'.
+          client.on("user-unpublished", (user, mediaType) => {
+            // When any of a user's tracks is unpublished, if video is removed, we remove the UI container.
+            if (mediaType === "video") {
+              removeUserContainer(user.uid);
+            }
+          });
+
+          client.on("user-left", (user) => {
+            removeUserContainer(user.uid);
+          });
+
+          joined = true;
+          setUiWhileWatching();
+        } catch (err) {
+          console.error(err);
+          alert("Failed to join as viewer: " + (err && err.message ? err.message : err));
+          setUiWhileDisconnected();
+        }
+      }
+
+      async function leave() {
+        if (!client) {
+          setUiWhileDisconnected();
+          return;
+        }
+        try {
+          // Stop and remove all containers
+          const children = Array.from(container.children);
+          for (const child of children) {
+            child.remove();
+          }
+          await client.leave();
+        } catch (err) {
+          console.warn("Leave warning:", err);
+        } finally {
+          client = null;
+          joined = false;
+          setUiWhileDisconnected();
+        }
+      }
+
+      watchBtn.addEventListener("click", () => startWatching());
+      leaveBtn.addEventListener("click", () => leave());
+
+      window.addEventListener("beforeunload", () => {
+        if (joined) {
+          leave();
+        }
+      });
+    </script>
+  </body>
+  </html>
+
+

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Streamer | Multi-Streamer Broadcast</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Agora Web SDK 4.x -->
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.2.js"></script>
+  </head>
+  <body class="min-h-screen bg-gray-950 text-gray-100">
+    <main class="max-w-5xl mx-auto px-4 py-10">
+      <section class="text-center mb-8">
+        <h1 class="text-3xl font-bold tracking-tight">Start Streaming</h1>
+        <p class="text-gray-400 mt-2">
+          Enter your Agora credentials to broadcast your camera and microphone.
+        </p>
+      </section>
+
+      <section
+        class="bg-gray-900/60 border border-gray-800 rounded-xl p-6 shadow-lg"
+      >
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="md:col-span-1">
+            <label for="appId" class="block text-sm text-gray-300">Agora App ID</label>
+            <input
+              id="appId"
+              type="text"
+              placeholder="e.g., 0123456789abcdef0123456789abcdef"
+              class="mt-1 w-full rounded-md bg-gray-800 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div class="md:col-span-1">
+            <label for="token" class="block text-sm text-gray-300">Agora Token (optional)</label>
+            <input
+              id="token"
+              type="text"
+              placeholder="Leave blank if token is not required"
+              class="mt-1 w-full rounded-md bg-gray-800 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div class="md:col-span-1">
+            <label for="channel" class="block text-sm text-gray-300">Channel Name</label>
+            <input
+              id="channel"
+              type="text"
+              placeholder="e.g., my-shared-room"
+              class="mt-1 w-full rounded-md bg-gray-800 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+          <button
+            id="joinBtn"
+            class="inline-flex items-center justify-center rounded-md bg-indigo-600 hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Join and Start Streaming
+          </button>
+          <button
+            id="leaveBtn"
+            class="inline-flex items-center justify-center rounded-md bg-gray-700 hover:bg-gray-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled
+          >
+            Leave Stream
+          </button>
+          <span id="status" class="text-sm text-gray-400">Disconnected</span>
+        </div>
+
+        <div class="mt-6">
+          <h2 class="text-lg font-semibold mb-2">Local Preview</h2>
+          <div
+            id="local-player"
+            class="relative w-full aspect-video rounded-lg bg-black/60 border border-gray-800 overflow-hidden"
+          ></div>
+        </div>
+      </section>
+
+      <section class="mt-10 text-xs text-gray-500">
+        <p>
+          Tip: This page must be served over HTTPS for camera and microphone
+          permissions to work in most browsers (GitHub Pages is HTTPS by default).
+        </p>
+      </section>
+    </main>
+
+    <script>
+      // High-level variables that hold Agora client and local tracks
+      /** @type {import('agora-rtc-sdk-ng').IAgoraRTCClient | null} */
+      let client = null;
+      /** @type {import('agora-rtc-sdk-ng').IMicrophoneAudioTrack | null} */
+      let microphoneTrack = null;
+      /** @type {import('agora-rtc-sdk-ng').ICameraVideoTrack | null} */
+      let cameraTrack = null;
+      let joined = false;
+
+      const $ = (id) => document.getElementById(id);
+      const joinBtn = $("joinBtn");
+      const leaveBtn = $("leaveBtn");
+      const statusEl = $("status");
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function setUiWhileJoining() {
+        joinBtn.disabled = true;
+        leaveBtn.disabled = true;
+        setStatus("Joining…");
+      }
+
+      function setUiWhileStreaming() {
+        joinBtn.disabled = true;
+        leaveBtn.disabled = false;
+        setStatus("Streaming Live");
+      }
+
+      function setUiWhileDisconnected() {
+        joinBtn.disabled = false;
+        leaveBtn.disabled = true;
+        setStatus("Disconnected");
+      }
+
+      // Core: Initialize Agora client, join channel, create/publish local tracks
+      async function joinAndPublish() {
+        const appId = $("appId").value.trim();
+        const tokenInput = $("token").value.trim();
+        const channel = $("channel").value.trim();
+
+        if (!appId || !channel) {
+          alert("Please enter both App ID and Channel Name.");
+          return;
+        }
+
+        if (joined) return;
+
+        try {
+          setUiWhileJoining();
+
+          // 1) Initialize the client. We use the 'live' profile to support host/audience roles.
+          client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+          // Broadcasters are 'host'. This allows publishing.
+          await client.setClientRole("host");
+
+          // 2) Join the channel. If token is empty, pass null.
+          const uid = await client.join(appId, channel, tokenInput || null, null);
+
+          // 3) Create microphone and camera tracks.
+          // This will prompt for permissions. If the user denies, it will throw.
+          const [microphone, camera] = await AgoraRTC.createMicrophoneAndCameraTracks();
+          microphoneTrack = microphone;
+          cameraTrack = camera;
+
+          // 4) Play local video so the streamer can see themselves.
+          cameraTrack.play("local-player");
+
+          // 5) Publish both audio and video tracks to the channel.
+          await client.publish([microphoneTrack, cameraTrack]);
+
+          joined = true;
+          setUiWhileStreaming();
+          console.log("Joined as UID:", uid);
+        } catch (err) {
+          console.error(err);
+          alert("Failed to start streaming: " + (err && err.message ? err.message : err));
+          await cleanup();
+          setUiWhileDisconnected();
+        }
+      }
+
+      // Core: Unpublish and leave the channel, cleaning up local resources
+      async function leaveChannel() {
+        if (!client) {
+          setUiWhileDisconnected();
+          return;
+        }
+        try {
+          // Unpublish local tracks if present
+          const tracks = [];
+          if (microphoneTrack) tracks.push(microphoneTrack);
+          if (cameraTrack) tracks.push(cameraTrack);
+          if (tracks.length > 0) {
+            await client.unpublish(tracks);
+          }
+        } catch (err) {
+          console.warn("Unpublish warning:", err);
+        } finally {
+          await cleanup();
+          try {
+            await client.leave();
+          } catch (err) {
+            console.warn("Leave warning:", err);
+          }
+          client = null;
+          joined = false;
+          setUiWhileDisconnected();
+        }
+      }
+
+      async function cleanup() {
+        try {
+          if (cameraTrack) {
+            cameraTrack.stop();
+            cameraTrack.close();
+            cameraTrack = null;
+          }
+          if (microphoneTrack) {
+            microphoneTrack.stop();
+            microphoneTrack.close();
+            microphoneTrack = null;
+          }
+          // Clear local player area
+          const local = document.getElementById("local-player");
+          if (local) local.innerHTML = "";
+        } catch (err) {
+          console.warn("Cleanup warning:", err);
+        }
+      }
+
+      // Wire up UI events
+      joinBtn.addEventListener("click", () => {
+        joinAndPublish();
+      });
+      leaveBtn.addEventListener("click", () => {
+        leaveChannel();
+      });
+
+      // Ensure resources are released if the page is closed/refreshed
+      window.addEventListener("beforeunload", () => {
+        if (joined) {
+          // Fire and forget
+          leaveChannel();
+        }
+      });
+    </script>
+  </body>
+  </html>
+
+
