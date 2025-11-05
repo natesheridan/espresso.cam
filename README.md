@@ -3,7 +3,7 @@ espresso.cam is an easy, in-browser way to set up simple live pet cams. It works
 
 It’s powered by Agora’s real‑time video, so it’s smooth and low-latency. Agora includes 10,000 free viewer minutes each month, which means you can realistically watch your furry friends for roughly 22% of the month with 1 camera, or about 11% of the month with 2 cameras—at zero cost—assuming a single viewer.
 
-I'd say check out the demo but this is meant to be free and you would drive my view minute costs up.
+I'd say check out the demo but this is meant to be free and you would drive my view minute costs up. So feel free to see the deployed demo, that has an expired token in it at [espresso.cam](https://espresso.cam)
 
 Static, browser‑only app hosted on GitHub Pages. Media and signaling are provided by Agora (RTC + RTM). No custom backend.
 
@@ -74,6 +74,7 @@ Static, browser‑only app hosted on GitHub Pages. Media and signaling are provi
 - Requires HTTPS (or `http://localhost`) for camera/microphone and service worker.
 - Viewers do not need tokens when the project allows tokenless subscribe; broadcasters may require a token depending on project security.
 - 404 on subpages: ensure Pages serves from repo root.
+
 
 
 
